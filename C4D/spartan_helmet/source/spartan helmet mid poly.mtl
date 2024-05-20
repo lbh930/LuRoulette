@@ -1,0 +1,14 @@
+# Blender MTL File: 'spartan_9512_autosave.blend'
+# Material Count: 1
+
+newmtl Material.008
+Ns 465.431939
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 0.566851 0.069016
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 3
+map_Bump -bm 2.400000 spartan normal map 4k texture.003.png
+map_Kd .

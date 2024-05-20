@@ -1,6 +1,7 @@
 using NUnit.Framework.Constraints;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEditor;
 using UnityEngine;
 
 public class Participant : MonoBehaviour
@@ -29,10 +30,16 @@ public class Participant : MonoBehaviour
     bool revolverInHand = false; //ownership of the revolver in animation sense
 
     float shootTimer = -99999999;
+    float unloadRevolverTimer = float.PositiveInfinity; //timer to play revolver animation after pick
+    float aiReloadTimer = float.PositiveInfinity;
+    float reloadDoneTimer = float.PositiveInfinity; //timer to reset camera after loading phase done 
     bool actionDecided = false;
     Participant shootTarget = null;
     bool endRoundSet = false;
     bool deathAnimationSet = false;
+    bool reloadDone = false;
+    bool unloadAnimationPlayed = false;
+    bool openRevolverPlayed = false;
 
     float timeLockTimer = -1;
 
@@ -59,10 +66,26 @@ public class Participant : MonoBehaviour
         }
     }
 
-    void OnMyRoundRefresh(RoundManager manager, Revolver revolver)
+    void ResetStates()
     {
         actionDecided = false;
-        endRoundSet = false;
+    }
+
+    public void OnDealerSwitch()
+    {
+        unloadRevolverTimer = float.PositiveInfinity; //timer to play revolver animation after pick
+        aiReloadTimer = float.PositiveInfinity;
+        reloadDoneTimer = float.PositiveInfinity;
+        openRevolverPlayed = false;
+        unloadAnimationPlayed = false;
+        revolverPicked = false;
+        reloadDone = false;
+    }
+
+    void OnMyRoundRefresh(RoundManager manager, Revolver revolver)
+    {
+        ResetStates();
+
         if (!isPlayer)
         {
             //ai logic
@@ -73,11 +96,14 @@ public class Participant : MonoBehaviour
 
     void OnMyRoundEnd(RoundManager manager, Revolver revolver)
     {
-        actionDecided = false;
+        ResetStates();
         revolverPicked = false;
+
+        unloadRevolverTimer = float.PositiveInfinity;
+
         if (!endRoundSet)
         {
-            print("play end round animation for: " + gameObject.name);
+            Logger.Log("play end round animation for: " + gameObject.name);
             animator.SetTrigger("End_Round");
             endRoundSet = true;
         }
@@ -87,7 +113,7 @@ public class Participant : MonoBehaviour
     {
         if (!deathAnimationSet)
         {
-            print(gameObject.name + " 's animator set die trigger");
+            Logger.Log(gameObject.name + " 's animator set die trigger");
             animator.SetTrigger("Die");
             deathAnimationSet = true;
         }   
@@ -95,10 +121,16 @@ public class Participant : MonoBehaviour
 
     bool OnMyRound(RoundManager manager, Revolver revolver, Participant opponent)
     {
+        endRoundSet = false;
+
         if (!revolverPicked)
         {
             animator.SetTrigger("Pick");
             revolverPicked = true;
+        }
+        else
+        {
+            animator.ResetTrigger("Pick");
         }
 
         CheckRevolverPos(revolver);
@@ -110,13 +142,14 @@ public class Participant : MonoBehaviour
             {
 
                 float prob = revolver.getShotProbability();
-                print("Considering naive Shot probability is: " + prob.ToString());
+                Logger.Log("Considering naive Shot probability is: " + prob.ToString());
 
                 if (Random.Range(0.0f, 1.0f) < prob)
                 {
                     //choose to shoot opponent
-                    print("AI decided to shoot opponent");
+                    Logger.Log("AI decided to shoot opponent");
                     animator.SetTrigger("Aim_Opponent");
+                    revolver.ReadyRevolver();
                     shootTarget = opponent;
                 }
                 else
@@ -124,15 +157,17 @@ public class Participant : MonoBehaviour
                     if (Random.Range(0.0f, 1.0f) < 0.3f)
                     {
                         //choose to shoot air
-                        print("AI decided to shoot air");
+                        Logger.Log("AI decided to shoot air");
                         animator.SetTrigger("Aim_Air");
+                        revolver.ReadyRevolver();
                         shootTarget = null;
                     }
                     else
                     {
                         //choose to shoot self
-                        print("AI decided to shoot self");
+                        Logger.Log("AI decided to shoot self");
                         animator.SetTrigger("Aim_Self");
+                        revolver.ReadyRevolver();
                         shootTarget = GetComponent<Participant>();
                     }
                 }
@@ -157,7 +192,7 @@ public class Participant : MonoBehaviour
                 }else if (shootTarget == this)
                 {
                     chips += revolver.getBulletCount();
-                    print(gameObject.name + " now have chips: "+ chips.ToString());
+                    Logger.Log(gameObject.name + " now have chips: "+ chips.ToString());
                 }
                 return true;
             }
@@ -171,6 +206,7 @@ public class Participant : MonoBehaviour
                 {
                     //player choose to shoot opponent
                     animator.SetTrigger("Aim_Opponent");
+                    revolver.ReadyRevolver();
                     shootTarget = opponent;
                     actionDecided = true;
                     timeLockTimer = Time.time + 1.5f;
@@ -179,6 +215,7 @@ public class Participant : MonoBehaviour
                 {
                     //player choose to shoot self
                     animator.SetTrigger("Aim_Self");
+                    revolver.ReadyRevolver();
                     shootTarget = this;
                     actionDecided = true;
                     timeLockTimer = Time.time + 1.5f;
@@ -187,6 +224,7 @@ public class Participant : MonoBehaviour
                 {
                     //player choose to shoot air
                     animator.SetTrigger("Aim_Air");
+                    revolver.ReadyRevolver();
                     shootTarget = null;
                     actionDecided = true;
                     timeLockTimer = Time.time + 1.5f;
@@ -206,7 +244,7 @@ public class Participant : MonoBehaviour
                 }else if (shootTarget == this)
                 {
                     chips += revolver.getBulletCount();
-                    print(gameObject.name + " now have chips: " + chips.ToString());
+                    Logger.Log(gameObject.name + " now have chips: " + chips.ToString());
                 }
                 return true;
             }
@@ -224,34 +262,129 @@ public class Participant : MonoBehaviour
             animator.SetTrigger("Pick");
             revolverPicked = true;
         }
+        else
+        {
+            animator.ResetTrigger("Pick");
+        }
 
         CheckRevolverPos(revolver);
 
-        print("To Be Implemented: Revolver Loading");
-
         if (!isPlayer)
         {
-
-        }
-
-        for (int i = 0; i <= 3; i++)
-        {
-            revolver.chamber[Random.Range(0, revolver.chamber.Length)] = true;
-        }
-
-        for (int i = 0; i < revolver.chamber.Length; i++)
-        {
-            if (revolver.chamber[i])
+            if (AnimationLock() || unloadRevolverTimer < 1)
             {
-                print("loaded on chamger: " + i.ToString());
+                if (unloadRevolverTimer > 0.4f)
+                {
+                    revolver.ClearChamber();
+                    unloadRevolverTimer = 0.4f;
+                }
+
+                unloadRevolverTimer -= Time.deltaTime;
+
+                if (unloadRevolverTimer < 0.8f)
+                {
+                    if (!reloadDone && !unloadAnimationPlayed)
+                    {
+                        animator.SetTrigger("Start_Unload");
+                        unloadAnimationPlayed = true;
+                    }
+                }
+
+                if (unloadRevolverTimer < 0)
+                {   
+                    if (!reloadDone && !openRevolverPlayed)
+                    {
+                        openRevolverPlayed = true;
+                        revolver.OpenRevolver();
+                    }
+
+                    if (unloadRevolverTimer < -0.4f)
+                    {
+                        if (!reloadDone)
+                        {
+                            //ai load
+                            for (int i = 0; i <= 1; i++)
+                            {
+                                revolver.chamber[Random.Range(0, revolver.chamber.Length)] = true;
+                            }
+                            revolver.firePointer = Random.Range(0, revolver.chamber.Length);
+                            reloadDone = true;
+                            animator.ResetTrigger("Start_Unload");
+
+                            revolver.CloseRevolver();
+                        }
+                    }
+
+                    if (unloadRevolverTimer < -2f)
+                    {
+                        Logger.Log("Puppet: reload done");
+                        return true;
+                    }
+                }
+
+
+            }
+
+        }
+        else
+        {
+            //player control
+            if (!reloadDone)          
+                animator.SetTrigger("Start_Unload");
+
+            if (unloadRevolverTimer > 2f) unloadRevolverTimer = 2f; //set to 1s
+            unloadRevolverTimer -= Time.deltaTime;
+
+            if (unloadRevolverTimer < 0)
+            {
+                if (!reloadDone)
+                    revolver.OpenRevolver();
+
+                if (unloadRevolverTimer > -0.33f)
+                {
+                    //clear before loading start
+                    revolver.ClearChamber();
+                }
+                else
+                {
+
+                    if (!reloadDone)
+                    {
+                        //loading time
+                        Camera.main.transform.position = revolver.reloadCamPos.position;
+                        Camera.main.transform.rotation = revolver.reloadCamPos.rotation;
+                        revolver.OnReloadingControl();
+                    }
+                    else {
+                        if (reloadDoneTimer > 0.5f) reloadDoneTimer = 0.5f;
+                        reloadDoneTimer -= Time.deltaTime;
+                        if (reloadDoneTimer < 0)
+                        {
+                            Camera.main.transform.position = Camera.main.transform.parent.position;
+                            Camera.main.transform.rotation = Camera.main.transform.parent.rotation;
+                            return true; //decision made
+                        }
+                    }
+
+                    if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
+                    {
+                        if (revolver.getBulletCount() > 0)
+                        {
+                            Logger.Log("Player: reload done");
+                            animator.SetTrigger("Start_Load");
+                            animator.ResetTrigger("Start_Unload");
+                            revolver.CloseRevolver();
+                            reloadDone = true;
+                        }
+                        else
+                        {
+                            Logger.Log("Load at least 1 bullet");
+                        }
+                    }
+                }
             }
         }
-
-        revolver.firePointer = Random.Range(0, revolver.chamber.Length);
-
-        print("pin pointing at: " + revolver.firePointer.ToString());
-
-        return true;
+        return false;
     }
 
     void CheckRevolverPos(Revolver revolver)
@@ -267,7 +400,7 @@ public class Participant : MonoBehaviour
 
     public void RevolverInHand()
     {
-        print(gameObject.name + ": revolver in hand!");
+        Logger.Log(gameObject.name + ": revolver in hand!");
         revolverInHand = true;
     }
     public void RevolverThrow()
@@ -283,4 +416,17 @@ public class Participant : MonoBehaviour
         }
     }
 
+
+    bool AnimationLock(float threshold = 0.01f)
+    {
+        AnimatorStateInfo stateInfo = animator.GetCurrentAnimatorStateInfo(0);
+        if (stateInfo.normalizedTime >= 1f - threshold && !animator.IsInTransition(0))
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
 }

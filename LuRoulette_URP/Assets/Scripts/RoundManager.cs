@@ -4,27 +4,28 @@ using System.Threading;
 using UnityEngine.SceneManagement;
 using UnityEngine;
 
-enum RoundState
-{
-    Start,
-    LoadRevolver,
-    Rolling,
-    Wait,
-    ChangeTurn,
-    End
-}
+
 
 public class RoundManager : MonoBehaviour
 {
+    public enum RoundState
+    {
+        Start,
+        LoadRevolver,
+        Rolling,
+        Wait,
+        ChangeTurn,
+        End
+    }
 
     public delegate void ChangeTurnDelegate();
     public ChangeTurnDelegate changeTurnDelegate;
 
     public Participant[] participants;
     public Revolver revolver;
-    public int participantPointer = 0;
+    public int participantPointer = 1;
 
-    RoundState roundState = RoundState.Start;
+    [HideInInspector]public RoundState roundState = RoundState.Start;
 
     int lastBulletCount = 0;
 
@@ -56,8 +57,8 @@ public class RoundManager : MonoBehaviour
                 {
                     participants[i].isDealer = false;
                 }
-                participantPointer = Random.Range(0, participants.Length);
-                participantPointer = 0;
+                //participantPointer = Random.Range(0, participants.Length);
+                //participantPointer = 0;
                 participants[participantPointer].isDealer = true;
 
                 lastBulletCount = revolver.getBulletCount();
@@ -73,6 +74,7 @@ public class RoundManager : MonoBehaviour
                         bool revolverActionMade = participants[i].onRevolverLoadDelegate.Invoke(this, revolver);
                         if (revolverActionMade)
                         {
+                            Logger.Log("Loading Phase Ended");
                             lastBulletCount = revolver.getBulletCount();
                             participants[participantPointer].onMyRoundRefreshDelegate.Invoke(this, revolver);
                             roundState = RoundState.Rolling;
@@ -138,9 +140,18 @@ public class RoundManager : MonoBehaviour
             case RoundState.Wait:
                 if (Time.time > timeLockTimer)
                 {
+                    if (revolver.getBulletCount() > 0)
+                    {
+                        roundState = RoundState.Rolling;
+                    }
+                    else
+                    {
+                        NextDealer();
+                        participantPointer = (participantPointer + 1) % (participants.Length);
+                        roundState = RoundState.LoadRevolver;
+                    }
                     lastBulletCount = revolver.getBulletCount();
                     participants[participantPointer].onMyRoundRefreshDelegate.Invoke(this, revolver);
-                    roundState = RoundState.Rolling;
                 }
 
                 break;
@@ -156,17 +167,27 @@ public class RoundManager : MonoBehaviour
 
                 if (Time.time > timeLockTimer)
                 {
+
+                    if (revolver.getBulletCount() > 0)
+                    {
+                        roundState = RoundState.Rolling;
+                    }
+                    else
+                    {
+                        NextDealer();
+                        roundState = RoundState.LoadRevolver;
+                    }
+
                     //next participant's turn
                     participantPointer = (participantPointer + 1) % (participants.Length);
                     participants[participantPointer].onMyRoundRefreshDelegate.Invoke(this, revolver);
-                    roundState = RoundState.Rolling;
                 }
 
                 break;
 
             case RoundState.End:
                 int winnerIndex = GetWinnerIndex();
-                print("The winner is: " + participants[winnerIndex].name);
+                Logger.Log("The winner is: " + participants[winnerIndex].name);
                 break;
         }
 
@@ -176,10 +197,13 @@ public class RoundManager : MonoBehaviour
     {
         //check if the only alive participant has more chips than any other dead players
         int survivorChips = 0;
+        //int opponentChips = 0;
+        bool playerSurvive = false;
         for (int i = 0; i < participants.Length; i++)
         {
             if (participants[i].health > 0)
             {
+                if (participants[i].isPlayer) playerSurvive = true;
                 survivorChips = participants[i].chips;
             }
         }
@@ -190,6 +214,11 @@ public class RoundManager : MonoBehaviour
             {
                 if (participants[i].chips > survivorChips)
                 {
+                    if (playerSurvive)
+                    {
+                        Logger.Log("Opponent Died. Gain a total of " + participants[i].chips + " chips to win.");
+                    }
+
                     return false;
                 }
             }
@@ -218,4 +247,31 @@ public class RoundManager : MonoBehaviour
     {
         shouldChangeTurn = true;
     }
+
+    void NextDealer()
+    {
+        //switch to next dealer
+
+        int dealerIndex = 0;
+        for (int i = 0; i < participants.Length; i++)
+        {
+            if (participants[i].isDealer)
+            {
+                dealerIndex = i;
+                participants[dealerIndex].isDealer = false;
+                Logger.Log(participants[dealerIndex].name + " is no longer Dealer.");
+                break;
+            }
+        }
+
+        participants[(dealerIndex + 1) % participants.Length].isDealer = true;
+        Logger.Log(participants[(dealerIndex + 1) % participants.Length].name + " is new Dealer.");
+
+        for (int i = 0; i < participants.Length; i++)
+        {
+            participants[i].OnDealerSwitch();
+        }
+    }
+
+    
 }
