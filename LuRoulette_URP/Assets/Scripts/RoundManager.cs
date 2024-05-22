@@ -12,6 +12,7 @@ public class RoundManager : MonoBehaviour
     {
         Start,
         LoadRevolver,
+        Buying,
         Rolling,
         Wait,
         ChangeTurn,
@@ -26,6 +27,10 @@ public class RoundManager : MonoBehaviour
     public int participantPointer = 1;
 
     [HideInInspector]public RoundState roundState = RoundState.Start;
+
+    //shopping cart
+    public ShoppingCart shoppingCart;
+
 
     int lastBulletCount = 0;
 
@@ -77,12 +82,30 @@ public class RoundManager : MonoBehaviour
                             Logger.Log("Loading Phase Ended");
                             lastBulletCount = revolver.getBulletCount();
                             participants[participantPointer].onMyRoundRefreshDelegate.Invoke(this, revolver);
-                            roundState = RoundState.Rolling;
+                            roundState = RoundState.Buying;
                         }
                     }
                 }
 
                 break;
+
+            case RoundState.Buying:
+                shoppingCart.ShowCart();
+
+                if (participants[participantPointer].health <= 0)
+                {
+                    participantPointer = (participantPointer + 1) % (participants.Length);
+                }
+
+                bool buyActionMade = participants[participantPointer].onMyPurchaseDelegate.Invoke(shoppingCart.tools);
+                if (buyActionMade)
+                {
+                    shoppingCart.HideCart();
+                    roundState = RoundState.Rolling;
+                }
+
+                break;
+
 
             case RoundState.Rolling:
                 //participants rolls to make action
@@ -170,7 +193,7 @@ public class RoundManager : MonoBehaviour
 
                     if (revolver.getBulletCount() > 0)
                     {
-                        roundState = RoundState.Rolling;
+                        roundState = RoundState.Buying;
                     }
                     else
                     {

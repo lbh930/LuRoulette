@@ -50,7 +50,7 @@ public class Revolver : MonoBehaviour
         {
             if (target != null)
             {
-                target.health -= 1;
+                target.TakeDamage(1);
             }
             chamber[firePointer] = false;
             firePointer = (firePointer + 1) % chamber.Length;

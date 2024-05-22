@@ -1,6 +1,7 @@
 using NUnit.Framework.Constraints;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEditor;
 using UnityEngine;
 
@@ -16,12 +17,18 @@ public class Participant : MonoBehaviour
     public OnMyRoundDelegate onMyRoundDelegate;
     public delegate bool OnRevolverLoadDelegate(RoundManager manager, Revolver revolver);
     public OnRevolverLoadDelegate onRevolverLoadDelegate;
+    public delegate bool OnMyPurchaseDelegate(ToolBase[] tools);
+    public OnMyPurchaseDelegate onMyPurchaseDelegate;
 
     public Transform revolverHandBase;
+    public Transform armorModel;
+    public Transform[] toolPos;
+    public ToolBase[] myTools;
 
     public bool isPlayer = false; //is this participant controlled by a human player
     public bool isDealer;
     public int health = 1;
+    public int armor = 1;
     public int chips = 0;
 
     Animator animator;
@@ -54,7 +61,10 @@ public class Participant : MonoBehaviour
         onMyRoundEndDelegate = OnMyRoundEnd;
         onMyRoundRefreshDelegate = OnMyRoundRefresh;
         onDeathDelegate = OnDeath;
+        onMyPurchaseDelegate = OnMyPurchase;
         animator = GetComponent<Animator>();
+
+        myTools = new ToolBase[toolPos.Length];
     }
 
     // Update is called once per frame
@@ -63,6 +73,56 @@ public class Participant : MonoBehaviour
         if (shootTimer > -1)
         {
             shootTimer -= Time.deltaTime;
+        }
+
+        UpdateArmorModel();
+    }
+
+    public bool RegisterTool (ToolBase tool)
+    {
+        bool foundVacancy = false;
+        for (int i = 0; i < myTools.Length; i++)
+        {
+            if (myTools[i] == null)
+            {
+                myTools[i] = tool;
+                foundVacancy = true;
+                chips -= tool.price;
+                tool.transform.position = toolPos[i].position;
+
+                break;
+            }
+        }
+
+        return foundVacancy;
+    }
+
+    public void TakeDamage(int damage)
+    {
+        if (armor > 0)
+        {
+            armor -= damage;
+            armor = Mathf.Max(armor, 0);
+        }
+        else
+        {
+            health -= damage;
+        }
+    }
+
+    void UpdateArmorModel()
+    {
+        if (armorModel == null)
+        {
+            UnityEngine.Debug.LogWarning(gameObject.name + " 's armor model not assigned.");
+        }
+        if (armor > 0)
+        {
+            armorModel.gameObject.SetActive(true);
+        }
+        else
+        {
+            armorModel.gameObject.SetActive(false);
         }
     }
 
@@ -119,6 +179,21 @@ public class Participant : MonoBehaviour
         }   
     }
 
+    public bool OnMyPurchase(ToolBase[] tools)
+    {
+        for (int i = 0; i < tools.Length; i++)
+        {
+            if (tools[i] != null)
+            {
+                tools[i].OnPurchasing(this);
+            }
+        }
+        if (Input.GetKeyDown(KeyCode.Return))
+        {
+            return true;
+        }
+        return false;
+    }
     bool OnMyRound(RoundManager manager, Revolver revolver, Participant opponent)
     {
         endRoundSet = false;
@@ -202,6 +277,14 @@ public class Participant : MonoBehaviour
             //Player Control Logic
             if (!actionDecided)
             {
+                //tool use logic
+                for (int i = 0; i < myTools.Length; i++)
+                {
+                    myTools[i].OnPossessed(this);
+                }
+
+                
+                //revolver shoot control logic
                 if (Input.GetKeyDown(KeyCode.W))
                 {
                     //player choose to shoot opponent
