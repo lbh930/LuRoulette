@@ -36,6 +36,8 @@ public class RoundManager : MonoBehaviour
 
     float timeLockTimer = -1;
 
+    float buyingDelayTimer = float.PositiveInfinity; //starting delay at Buying state
+
     bool shouldChangeTurn = false;
     
     // Start is called before the first frame update
@@ -90,20 +92,27 @@ public class RoundManager : MonoBehaviour
                 break;
 
             case RoundState.Buying:
-                shoppingCart.ShowCart();
-
-                if (participants[participantPointer].health <= 0)
+                //delay 1 second at start
+                buyingDelayTimer -= Time.deltaTime;
+                if (buyingDelayTimer > 1f) buyingDelayTimer = 1f;
+                if (buyingDelayTimer <= 0)
                 {
-                    participantPointer = (participantPointer + 1) % (participants.Length);
-                }
+                    shoppingCart.ShowCart();
 
-                bool buyActionMade = participants[participantPointer].onMyPurchaseDelegate.Invoke(shoppingCart.tools);
-                if (buyActionMade)
-                {
-                    shoppingCart.HideCart();
-                    roundState = RoundState.Rolling;
-                }
+                    if (participants[participantPointer].health <= 0)
+                    {
+                        participantPointer = (participantPointer + 1) % (participants.Length);
+                    }
 
+                    bool buyActionMade = participants[participantPointer].onMyPurchaseDelegate.Invoke(shoppingCart.tools);
+                    if (buyActionMade)
+                    {
+                        Logger.Log("Buying decision made: " + participants[participantPointer].name);
+                        shoppingCart.HideCart();
+                        buyingDelayTimer = float.PositiveInfinity;
+                        roundState = RoundState.Rolling;
+                    }
+                }
                 break;
 
 

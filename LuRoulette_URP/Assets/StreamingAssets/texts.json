@@ -1,0 +1,10 @@
+{
+    "entries": [
+        {"key": "default_0", "value": "工具:有用"},
+        {"key": "helmetDesc_0", "value": "头盔:穿上后帮您挡下一次针对您的射击"},
+        {"key": "helmetUnusable_0", "value": "无法使用（已穿戴）"},
+        {"key": "tequilaDesc_0", "value": "龙舌兰:自罚一杯，向空中扣动扳机，之后还是您的回合"}
+        {"key": "bourbonDesc_0", "value": "波本:使西部枪手将你附体，向对手连续扣动两次扳机后结束回合"}
+        {"key": "shaojiuDesc_0", "value": "三碗不过岗:你将连续操控2个回合。之后由对手操控2个回合。"}
+    ]
+}

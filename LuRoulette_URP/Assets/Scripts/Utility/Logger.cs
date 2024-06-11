@@ -30,4 +30,9 @@ public class Logger : MonoBehaviour
         }
         print(s);
     }
+
+    public static void Display(string s)
+    {
+        log = s;
+    }
 }

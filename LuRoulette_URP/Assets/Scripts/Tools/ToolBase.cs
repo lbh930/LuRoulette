@@ -8,10 +8,20 @@ public class ToolBase : MonoBehaviour
     // Start is called before the first frame update
     public int price;
     public bool onCart; //oncart means not purchased yet
-    bool pointing = true;
+    public int toolType = 0;
+    bool pointing = false;
+    bool lastPointing = false;
     Participant user;
 
     int originalLayer = 0;
+
+    bool interactable = true;
+
+
+    Vector3 lastRot;
+    Vector3 lastPos;
+    [HideInInspector] public Vector3 angularVelocity;
+    [HideInInspector]public Vector3 velocity;
 
     void Start()
     {
@@ -22,6 +32,7 @@ public class ToolBase : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        OnUpdating();
         if (onCart)
         {
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -37,16 +48,37 @@ public class ToolBase : MonoBehaviour
                 }
             }
         }
-
-        if (pointing)
+        else
         {
+            //已被买下，可以使用
+            if (pointing && user != null)
+            {
+                if (Input.GetMouseButtonDown(0))
+                {
+                    user.toolUsing = this;
+                    UseTool(user);
+                    interactable = false;
+                }
+            }
+        }
+
+        if (pointing && interactable)
+        {
+            if (!lastPointing)
+            {
+                lastPointing = true;
+                OnPointerEnter();
+            }
             foreach (Transform trans in gameObject.GetComponentsInChildren<Transform>())
             {
                 trans.gameObject.layer = 6;
             }
+
+            OnPointing();
         }
         else
         {
+            lastPointing = false;
             foreach (Transform trans in gameObject.GetComponentsInChildren<Transform>())
             {
                 trans.gameObject.layer = originalLayer;
@@ -54,8 +86,16 @@ public class ToolBase : MonoBehaviour
         }
     }
 
+    public void Bought()
+    {
+        onCart = false;
+        pointing = false;
+        transform.SetParent(null);
+    }
+
     public void OnPurchasing(Participant participant)
     {
+        print(gameObject.name + onCart + pointing);
         // called when in participants' turn and the participant is in buying state
         if (onCart && pointing)
         {
@@ -67,9 +107,8 @@ public class ToolBase : MonoBehaviour
                 {
                     if (participant.RegisterTool(this))
                     {
-                        onCart = false;
-                        pointing = false;
-                        transform.SetParent(null);
+                        user = participant;
+                        Bought();
                     }
                     else
                     {
@@ -106,12 +145,54 @@ public class ToolBase : MonoBehaviour
         }
     }
 
+    public virtual void OnUpdating()
+    {
+        velocity = (transform.position - lastPos) / Time.deltaTime;
+        angularVelocity = (transform.eulerAngles - lastRot) / Time.deltaTime;
+        angularVelocity = Vector3.zero;
+        lastPos = transform.position;
+        lastRot = transform.eulerAngles;
+    }
+
+    public virtual void OnPointing()
+    {
+
+    }
+
+    public virtual void OnPointerEnter()
+    {
+        Logger.Display(TextReader.GetText("default"));
+    }
+
     public virtual void UseTool(Participant participant)
     {
+        print("Using tool: " + gameObject.name);
 
         user = participant;
 
         //to be implemented in child class
         //...
+    }
+
+    public virtual void _anim_OpenBottle()
+    {
+
+    }
+
+    public virtual void _anim_GrabTool()
+    {
+        if (user != null)
+        {
+            transform.SetParent(user.toolHandBase);
+            transform.localPosition = Vector3.zero;
+        }
+    }
+
+    public virtual void _anim_ThrowTool()
+    {
+        gameObject.AddComponent<Rigidbody>();
+        Rigidbody rigid = GetComponent<Rigidbody>();
+        rigid.velocity = velocity;
+        rigid.angularVelocity = angularVelocity;
     }
 }

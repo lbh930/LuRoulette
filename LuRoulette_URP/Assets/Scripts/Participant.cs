@@ -21,6 +21,7 @@ public class Participant : MonoBehaviour
     public OnMyPurchaseDelegate onMyPurchaseDelegate;
 
     public Transform revolverHandBase;
+    public Transform toolHandBase;
     public Transform armorModel;
     public Transform[] toolPos;
     public ToolBase[] myTools;
@@ -30,6 +31,8 @@ public class Participant : MonoBehaviour
     public int health = 1;
     public int armor = 1;
     public int chips = 0;
+
+    [HideInInspector]public ToolBase toolUsing;
 
     Animator animator;
 
@@ -50,6 +53,12 @@ public class Participant : MonoBehaviour
 
     float timeLockTimer = -1;
 
+    float aiBuyTimer = float.PositiveInfinity;
+
+    float aiDecideTimer = float.PositiveInfinity; //模拟ai思考射击对象的时间
+
+    bool buyDecisionTrigger = false; //购买完成按钮触发
+
     //Player Control Related
 
 
@@ -64,6 +73,14 @@ public class Participant : MonoBehaviour
         onMyPurchaseDelegate = OnMyPurchase;
         animator = GetComponent<Animator>();
 
+        if (isPlayer)
+        {
+            foreach (ButtonBase button in FindObjectsByType<ButtonBase>(FindObjectsSortMode.None))
+            {
+                button.RegisterPlayer(this);
+            }
+        }
+
         myTools = new ToolBase[toolPos.Length];
     }
 
@@ -76,6 +93,11 @@ public class Participant : MonoBehaviour
         }
 
         UpdateArmorModel();
+    }
+
+    public void BuyDecisionTrigger()
+    {
+        buyDecisionTrigger = true;
     }
 
     public bool RegisterTool (ToolBase tool)
@@ -179,20 +201,78 @@ public class Participant : MonoBehaviour
         }   
     }
 
+    void LerpCam (Transform target)
+    {
+        Camera.main.transform.position = Vector3.MoveTowards(Camera.main.transform.position,
+            target.position, Time.deltaTime * 2);
+        Camera.main.transform.rotation = Quaternion.Slerp(Camera.main.transform.rotation,
+            target.rotation, Time.deltaTime * 3.33f);
+    }
+
     public bool OnMyPurchase(ToolBase[] tools)
     {
-        for (int i = 0; i < tools.Length; i++)
+        if (isPlayer)
         {
-            if (tools[i] != null)
+            //player control logic
+            LerpCam(GameObject.FindGameObjectWithTag("CamPosBuy").transform);
+
+            for (int i = 0; i < tools.Length; i++)
             {
-                tools[i].OnPurchasing(this);
+                if (tools[i] != null && tools[i].onCart)
+                {
+                    tools[i].OnPurchasing(this);
+                }
+            }
+            if (Input.GetKeyDown(KeyCode.Return) || buyDecisionTrigger)
+            {
+                buyDecisionTrigger = false;
+                return true;
+            }
+            return false;
+        }
+        else
+        {
+            //ai logic
+
+            aiBuyTimer -= Time.deltaTime;
+            if (aiBuyTimer > 2.5f) aiBuyTimer = 2.5f;
+
+            bool decideNotToBuy = true;
+            if (aiBuyTimer < 0)
+            {
+                for (int i = Random.Range(0, tools.Length); i < tools.Length; i++)
+                {
+                    if (tools[i] != null && tools[i].onCart && tools[i].price <= chips)
+                    {
+                        if (Random.Range(0.0f, 1.0f) < 0.25f)
+                        {
+                            if (RegisterTool(tools[i]))
+                            {
+                                tools[i].Bought();
+                                aiBuyTimer = 1f;
+                                decideNotToBuy = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (decideNotToBuy)
+                {
+                    aiBuyTimer = 2.5f;
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                return false;
             }
         }
-        if (Input.GetKeyDown(KeyCode.Return))
-        {
-            return true;
-        }
-        return false;
+
     }
     bool OnMyRound(RoundManager manager, Revolver revolver, Participant opponent)
     {
@@ -213,7 +293,10 @@ public class Participant : MonoBehaviour
         if (!isPlayer)
         {
             //AI logic
-            if (Time.time > timeLockTimer && !actionDecided)
+            if (aiDecideTimer > 1.5f) aiDecideTimer = 1.5f;
+            aiDecideTimer -= Time.deltaTime;
+
+            if (aiDecideTimer <= 0 && Time.time > timeLockTimer && !actionDecided)
             {
 
                 float prob = revolver.getShotProbability();
@@ -247,7 +330,8 @@ public class Participant : MonoBehaviour
                     }
                 }
                 actionDecided = true;
-                timeLockTimer = Time.time + 1.5f;
+                aiDecideTimer = float.PositiveInfinity;
+                timeLockTimer = Time.time + 0.8f;
             }
 
             if (Time.time > timeLockTimer && actionDecided) //shoot
@@ -274,13 +358,17 @@ public class Participant : MonoBehaviour
         }
         else
         {
+            LerpCam(GameObject.FindGameObjectWithTag("CamPosNormal").transform);
             //Player Control Logic
             if (!actionDecided)
             {
                 //tool use logic
                 for (int i = 0; i < myTools.Length; i++)
                 {
-                    myTools[i].OnPossessed(this);
+                    if (myTools[i] != null)
+                    {
+                        myTools[i].OnPossessed(this);
+                    }
                 }
 
                 
@@ -497,6 +585,21 @@ public class Participant : MonoBehaviour
                 trans.SetParent(null);
             }
         }
+    }
+
+    public void _anim_OpenBottle()
+    {
+        if (toolUsing) toolUsing._anim_OpenBottle();
+    }
+
+    public void _anim_GrabTool()
+    {
+        if (toolUsing) toolUsing._anim_GrabTool();
+    }
+
+    public void _anim_ThrowTool()
+    {
+        if (toolUsing) toolUsing._anim_ThrowTool();
     }
 
 

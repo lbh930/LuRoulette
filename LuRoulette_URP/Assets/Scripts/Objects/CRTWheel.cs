@@ -45,8 +45,9 @@ public class CRTWheel : MonoBehaviour
 
             if (manager.roundState == RoundManager.RoundState.Rolling ||
                 manager.roundState == RoundManager.RoundState.LoadRevolver
-                || manager.roundState == RoundManager.RoundState.Wait ||
-                manager.roundState == RoundManager.RoundState.ChangeTurn)
+                || manager.roundState == RoundManager.RoundState.Wait || 
+                manager.roundState == RoundManager.RoundState.ChangeTurn ||
+                manager.roundState == RoundManager.RoundState.Buying)
             {
                 wheel.gameObject.SetActive(true);
             }
